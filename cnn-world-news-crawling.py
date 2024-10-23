@@ -247,10 +247,36 @@ class PublishLogger:
                 }, f, ensure_ascii=False, indent=2)
             print(f"Failed articles saved to: {failed_file}")
 
-def main():
+
+from googletrans import Translator
+def translate_html_content(html_content):
+    # BeautifulSoup를 사용하여 HTML 파싱
+    soup = BeautifulSoup(html_content, 'html.parser')
+    translator = Translator()
+    
+    # 모든 텍스트를 한국어로 번역
+    for element in soup.find_all(text=True):
+        if element.strip():  # 공백 문자열은 건너뛰기
+            translated_text = translator.translate(element, dest='ko').text
+            element.replace_with(translated_text)
+    
+    return str(soup)
+
+
+import deepl
+def deepl_translate_html_content(html_content, api_key='37~~~~~~~~~~~~~~~~~~~~~`:fx'):
+    auth_key = api_key  # Replace with your key
+    translator = deepl.Translator(auth_key)
+
+    result = translator.translate_text(html_content, target_lang="KO")
+    return(result.text)
+
+
+def main(url='https://edition.cnn.com/world', num_headlines=5):
+
     # WordPress 설정
-    WP_URL = 'https://---'
-    WP_USER = '---'
+    WP_URL = 'https://----'
+    WP_USER = '----'
     WP_APP_PASSWORD = 'M9sD 0ywd TsGX zHr7 NJ0l azaN'
     
     # 크롤러, 퍼블리셔, 로거 초기화
@@ -260,7 +286,7 @@ def main():
     
     # 헤드라인 수집
     print("Collecting headlines...")
-    headlines = crawler.get_headlines(num_headlines=3)
+    headlines = crawler.get_headlines(url = url, num_headlines = num_headlines)
     
     if not headlines:
         print("No headlines found.")
@@ -276,17 +302,21 @@ def main():
         # 기사 내용 수집
         try:
             article_data = crawler.get_article_content(url)
-            
+
             # 내용이 없으면 다음 기사로 진행
             if not article_data or not article_data['content'].strip():
                 error_msg = "Empty or no content found"
                 print(f"Skipping article: {error_msg}")
                 logger.add_failure({'title': title, 'url': url}, error_msg)
                 continue
-                
+            
+            title_kr = translate_html_content(article_data['title'])
+            content_kr = translate_html_content(article_data['content'])
+
+            
             # WordPress 포스트 내용 구성
             post_content = f"""
-{article_data['content']}
+{content_kr}
 
 <hr>
 
@@ -295,9 +325,9 @@ def main():
             
             # WordPress에 포스트 생성
             result = publisher.create_post(
-                title=article_data['title'],
+                title=title_kr,
                 content=post_content,
-                status='publish'  # 또는 'draft'
+                status='draft'  # 또는 'draft', 'publish'
             )
             
             if result:
@@ -327,4 +357,6 @@ def main():
     print(f"Failed to publish: {len(logger.failed_data)}")
 
 if __name__ == "__main__":
-    main()
+    #main(url='https://edition.cnn.com/world/asia/south-korea', num_headlines=3)    
+    main(url='https://edition.cnn.com/asia', num_headlines=0)
+    main(url='https://edition.cnn.com/world', num_headlines=10)
